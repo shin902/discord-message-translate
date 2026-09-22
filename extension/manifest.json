@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Discord Message Translate",
+  "version": "0.1.0",
+  "description": "Discord Webのメッセージを翻訳。翻訳先と同じ言語はスキップし、原文を残して表示します。",
+  "minimum_chrome_version": "120",
+  "permissions": ["storage"],
+  "host_permissions": ["https://discord.com/*", "https://ptb.discord.com/*", "https://canary.discord.com/*"],
+  "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": { "default_popup": "options.html", "default_title": "Discord翻訳の設定" },
+  "options_page": "options.html",
+  "content_scripts": [{
+    "matches": ["https://discord.com/*", "https://ptb.discord.com/*", "https://canary.discord.com/*"],
+    "js": ["content.js"],
+    "css": ["content.css"],
+    "run_at": "document_idle"
+  }]
+}
