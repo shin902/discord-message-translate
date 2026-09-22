@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { JSDOM } from 'jsdom';
 
 const source = await readFile(new URL('../extension/content.js', import.meta.url), 'utf8');
-const tick = () => new Promise(resolve => setTimeout(resolve, 140));
+const tick = (ms = 240) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function setup(t, { html = '<div id="message-content-123">Hello world</div>', automatic = false, respond = async () => ({ text: 'こんにちは世界' }) } = {}) {
   const dom = new JSDOM(`<main>${html}</main>`, { url: 'https://discord.com/channels/1/2', runScripts: 'outside-only' });
@@ -30,7 +30,8 @@ async function setup(t, { html = '<div id="message-content-123">Hello world</div
   dom.window.eval(source);
   await tick();
   return { document: dom.window.document, calls, settings,
-    visible: () => intersect([...observed].map(target => ({ target, isIntersecting: true }))),
+    visible: (isIntersecting = true) => intersect([...observed].map(target => ({ target, isIntersecting }))),
+    scroll: () => dom.window.document.querySelector('main').dispatchEvent(new dom.window.Event('scroll')),
     refresh: async () => { listeners.forEach(listener => listener({ type: 'settings-changed' })); await tick(); }
   };
 }
@@ -133,4 +134,66 @@ test('same-language auto results are hidden; failures require explicit retry', a
   assert.equal(attempt, 2);
   assert.equal(app.document.querySelector('button').textContent, '翻訳先と同じ言語です');
   assert.equal(app.document.querySelector('.dmt-output').textContent, '');
+});
+
+test('unrelated DOM updates do not re-read messages, and an edit only reads that body', async t => {
+  const app = await setup(t, { html: '<aside></aside><div id="message-content-1">First</div><div id="message-content-2">Second</div>' });
+  const reads = [];
+  for (const body of app.document.querySelectorAll('[id^="message-content-"]')) {
+    const clone = body.cloneNode.bind(body);
+    body.cloneNode = deep => { reads.push(body.id); return clone(deep); };
+  }
+  for (let i = 0; i < 20; i++) app.document.querySelector('aside').textContent = `Typing ${i}`;
+  await tick();
+  assert.deepEqual(reads, []);
+  app.document.getElementById('message-content-2').textContent = 'Edited';
+  await tick();
+  assert.deepEqual(reads, ['message-content-2']);
+});
+
+test('scrolling defers automatic requests and discovery until scrolling stops', async t => {
+  const app = await setup(t, { automatic: true });
+  app.scroll();
+  app.visible();
+  const body = app.document.createElement('div');
+  body.id = 'message-content-new';
+  body.textContent = 'New message';
+  app.document.querySelector('main').append(body);
+  await tick(120);
+  app.scroll();
+  await tick(120);
+  assert.equal(app.calls.length, 0);
+  assert.equal(app.document.querySelectorAll('.dmt').length, 1);
+  await tick();
+  assert.deepEqual(app.calls, ['Hello world']);
+  assert.equal(app.document.querySelectorAll('.dmt').length, 2);
+});
+
+test('an arriving translation waits for scroll idle and for its message to be visible', async t => {
+  let resolve;
+  const app = await setup(t, { automatic: true, respond: () => new Promise(r => { resolve = r; }) });
+  app.visible();
+  await tick();
+  app.scroll();
+  resolve({ text: '待機した訳文' });
+  await tick(120);
+  assert.equal(app.document.querySelector('.dmt-output').textContent, '');
+  app.visible(false);
+  await tick();
+  assert.equal(app.document.querySelector('.dmt-output').textContent, '');
+  app.visible();
+  await tick();
+  assert.equal(app.document.querySelector('.dmt-output').textContent, '待機した訳文');
+  assert.equal(app.calls.length, 1);
+});
+
+test('a manual click just after scrolling is honored, but its result waits for idle', async t => {
+  const app = await setup(t);
+  app.scroll();
+  app.document.querySelector('button').click();
+  await tick(120);
+  assert.deepEqual(app.calls, ['Hello world']);
+  assert.equal(app.document.querySelector('.dmt-output').textContent, '');
+  await tick();
+  assert.equal(app.document.querySelector('.dmt-output').textContent, 'こんにちは世界');
 });
