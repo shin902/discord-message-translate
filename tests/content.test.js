@@ -75,6 +75,39 @@ test('message edits discard stale responses and are translated again', async t =
   assert.equal(app.document.querySelectorAll('.dmt').length, 1);
 });
 
+test('reply previews with reused message IDs get neither buttons nor automatic requests', async t => {
+  const app = await setup(t, { automatic: true, html: `
+    <article><div id="message-content-10">Original message</div></article>
+    <article>
+      <div id="message-reply-context-20" class="repliedMessage_hash">
+        <div role="button"><div id="message-content-10" class="repliedTextContent_hash">Quoted preview</div></div>
+      </div>
+      <div id="message-content-20">Reply body</div>
+    </article>` });
+  assert.equal(app.document.querySelector('[id^="message-reply-context-"] .dmt'), null);
+  assert.equal(app.document.querySelectorAll('.dmt').length, 2);
+  app.visible();
+  await tick();
+  assert.deepEqual(app.calls, ['Original message', 'Reply body']);
+  assert.equal(app.document.querySelector('[id^="message-reply-context-"] .dmt'), null);
+});
+
+test('a body moved into a reply preview loses its translation and ignores pending output', async t => {
+  let resolve;
+  const app = await setup(t, { respond: () => new Promise(r => { resolve = r; }) });
+  app.document.querySelector('button').click();
+  const reply = app.document.createElement('div');
+  reply.id = 'message-reply-context-20';
+  app.document.querySelector('main').append(reply);
+  reply.append(app.document.querySelector('[id^="message-content-"]'));
+  resolve({ text: '引用には表示しない' });
+  await tick();
+  assert.equal(app.document.querySelector('.dmt'), null);
+  app.visible();
+  await tick();
+  assert.equal(app.calls.length, 1);
+});
+
 test('disabled settings remove translations and suppress pending output', async t => {
   let resolve;
   const app = await setup(t, { respond: () => new Promise(r => { resolve = r; }) });

@@ -5,6 +5,12 @@
   let generation = 0;
   let timer;
 
+  function isMessageBody(element) {
+    // Discord reuses message-content IDs inside reply previews, including the
+    // same ID as the original message. The reply context is a separate surface.
+    return element.matches(SELECTOR) && !element.closest('[id^="message-reply-context-"], [contenteditable="true"]');
+  }
+
   function extractText(element) {
     const clone = element.cloneNode(true);
     clone.querySelectorAll('pre, code, [class*="spoiler"], .dmt').forEach(node => node.remove());
@@ -34,14 +40,14 @@
   }
 
   async function run(element, state, manual = false) {
-    if (!settings.enabled || state.busy || state.done || !element.isConnected) return;
+    if (!settings.enabled || state.busy || state.done || !element.isConnected || !isMessageBody(element)) return;
     const version = generation;
     state.busy = true;
     state.button.disabled = true;
     state.button.textContent = '翻訳中…';
     try {
       const result = await chrome.runtime.sendMessage({ type: 'translate', text: state.text });
-      if (version !== generation || states.get(element) !== state || !element.isConnected || extractText(element) !== state.text) return;
+      if (version !== generation || states.get(element) !== state || !element.isConnected || !isMessageBody(element) || extractText(element) !== state.text) return;
       if (!result || result.error) throw new Error(result?.error || '翻訳に失敗しました。');
       state.done = true;
       state.box.classList.remove('dmt-error');
@@ -91,12 +97,12 @@
   function scan() {
     if (!settings.enabled) return;
     for (const [element, state] of states) {
-      if (!element.isConnected) removeState(element, state);
+      if (!element.isConnected || !isMessageBody(element)) removeState(element, state);
     }
     if (!location.pathname.startsWith('/channels/')) return;
     document.querySelectorAll(SELECTOR).forEach(element => {
       // Only message bodies; never read Discord's editor or reply previews.
-      if (element.closest('[contenteditable="true"]')) return;
+      if (!isMessageBody(element)) return;
       const text = extractText(element);
       let state = states.get(element);
       if (state && (state.text !== text || !state.box.isConnected)) {
