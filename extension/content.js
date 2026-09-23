@@ -146,7 +146,7 @@
       }
       // Do not change heights above/below the viewport as results arrive.
       // The result remains ready until the message comes back into view.
-      if (!result.manual && !result.state.visible) continue;
+      if (!result.state.visible) continue;
       ready.delete(element);
       result.render();
       result.state.busy = false;

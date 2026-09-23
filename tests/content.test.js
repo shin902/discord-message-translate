@@ -37,8 +37,10 @@ async function setup(t, { html = '<div id="message-content-123">Hello world</div
 }
 
 test('manual translation preserves original and displays untrusted output as plain text', async t => {
-  const { document, calls } = await setup(t, { respond: async () => ({ text: '<img src=x onerror=alert(1)>' }) });
+  const app = await setup(t, { respond: async () => ({ text: '<img src=x onerror=alert(1)>' }) });
+  const { document, calls } = app;
   assert.equal(calls.length, 0);
+  app.visible();
   document.querySelector('button').click();
   await tick();
   assert.equal(document.querySelector('[id^=message-content]').textContent, 'Hello world');
@@ -64,12 +66,14 @@ test('automatic translation only starts after visibility and ignores code/spoile
 test('message edits discard stale responses and are translated again', async t => {
   let resolve;
   const app = await setup(t, { respond: text => text === 'Hello world' ? new Promise(r => { resolve = r; }) : Promise.resolve({ text: '新しい訳' }) });
+  app.visible();
   app.document.querySelector('button').click();
   app.document.querySelector('[id^=message-content]').textContent = 'Edited text';
   await tick();
   resolve({ text: '古い訳' });
   await tick();
   assert.equal(app.document.querySelector('.dmt-output').textContent, '');
+  app.visible();
   app.document.querySelector('button').click();
   await tick();
   assert.equal(app.document.querySelector('.dmt-output').textContent, '新しい訳');
@@ -86,6 +90,7 @@ test('removed controls are recreated for an unchanged message and remain usable'
   assert.equal(body.textContent, 'Hello world');
   assert.equal(app.document.querySelectorAll('.dmt').length, 1);
   assert.notEqual(body.nextElementSibling, box);
+  app.visible();
   body.nextElementSibling.querySelector('button').click();
   await tick();
   assert.deepEqual(app.calls, ['Hello world']);
@@ -218,6 +223,7 @@ test('an arriving translation waits for scroll idle and for its message to be vi
 
 test('a manual click just after scrolling is honored, but its result waits for idle', async t => {
   const app = await setup(t);
+  app.visible();
   app.scroll();
   app.document.querySelector('button').click();
   await tick(120);
@@ -225,4 +231,21 @@ test('a manual click just after scrolling is honored, but its result waits for i
   assert.equal(app.document.querySelector('.dmt-output').textContent, '');
   await tick();
   assert.equal(app.document.querySelector('.dmt-output').textContent, 'こんにちは世界');
+});
+
+test('a manual result waits until its message comes back into view', async t => {
+  let resolve;
+  const app = await setup(t, { respond: () => new Promise(r => { resolve = r; }) });
+  app.visible();
+  app.document.querySelector('button').click();
+  assert.deepEqual(app.calls, ['Hello world']);
+  app.scroll();
+  app.visible(false);
+  resolve({ text: '待機した訳文' });
+  await tick();
+  assert.equal(app.document.querySelector('.dmt-output').textContent, '');
+  app.visible();
+  await tick();
+  assert.equal(app.document.querySelector('.dmt-output').textContent, '待機した訳文');
+  assert.equal(app.calls.length, 1);
 });
