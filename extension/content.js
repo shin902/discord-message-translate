@@ -1,6 +1,7 @@
 (() => {
   const SELECTOR = '[id^="message-content-"]';
   const states = new Map();
+  const boxOwners = new WeakMap();
   const dirty = new Set();
   const ready = new Map();
   let settings = { enabled: false, automatic: false };
@@ -44,6 +45,7 @@
     const state = { text, box, button, output, busy: false, done: false, visible: false };
     button.addEventListener('click', () => run(element, state, true));
     states.set(element, state);
+    boxOwners.set(box, element);
     visibility.observe(element);
     return state;
   }
@@ -109,6 +111,7 @@
   function removeState(element, state) {
     visibility.unobserve(element);
     ready.delete(element);
+    boxOwners.delete(state.box);
     state.box.remove();
     states.delete(element);
   }
@@ -175,6 +178,10 @@
       }
       for (const node of mutation.addedNodes) collect(node);
       for (const node of mutation.removedNodes) {
+        // Discord can remove only the controls while retaining the message body.
+        // Our own removals have already cleared this ownership entry.
+        const owner = boxOwners.get(node);
+        if (owner && !node.isConnected) dirty.add(owner);
         if (node.nodeType !== Node.ELEMENT_NODE || node.matches('.dmt')) continue;
         if (node.matches(SELECTOR) || node.querySelector(SELECTOR)) cleanup = true;
       }

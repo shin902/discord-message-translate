@@ -76,6 +76,35 @@ test('message edits discard stale responses and are translated again', async t =
   assert.equal(app.document.querySelectorAll('.dmt').length, 1);
 });
 
+test('removed controls are recreated for an unchanged message and remain usable', async t => {
+  const app = await setup(t);
+  const body = app.document.getElementById('message-content-123');
+  const box = body.nextElementSibling;
+  box.remove();
+  await tick();
+  assert.equal(app.document.getElementById(body.id), body);
+  assert.equal(body.textContent, 'Hello world');
+  assert.equal(app.document.querySelectorAll('.dmt').length, 1);
+  assert.notEqual(body.nextElementSibling, box);
+  body.nextElementSibling.querySelector('button').click();
+  await tick();
+  assert.deepEqual(app.calls, ['Hello world']);
+  assert.equal(app.document.querySelector('.dmt-output').textContent, 'こんにちは世界');
+});
+
+test('recreated controls discard pending responses from the removed controls', async t => {
+  let resolve;
+  const app = await setup(t, { respond: () => new Promise(r => { resolve = r; }) });
+  app.document.querySelector('button').click();
+  app.document.querySelector('.dmt').remove();
+  await tick();
+  resolve({ text: '古い訳' });
+  await tick();
+  assert.equal(app.document.querySelectorAll('.dmt').length, 1);
+  assert.equal(app.document.querySelector('.dmt-output').textContent, '');
+  assert.equal(app.document.querySelector('button').disabled, false);
+});
+
 test('reply previews with reused message IDs get neither buttons nor automatic requests', async t => {
   const app = await setup(t, { automatic: true, html: `
     <article><div id="message-content-10">Original message</div></article>
