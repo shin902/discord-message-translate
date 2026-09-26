@@ -1,0 +1,8 @@
+.dmt { margin: 4px 0 7px; padding-left: 10px; border-left: 2px solid var(--brand-500, #5865f2); font-size: 0.875rem; color: var(--text-normal, #dcdfe5); }
+.dmt[hidden], .dmt-output[hidden] { display: none; }
+.dmt-button { appearance: none; border: 0; padding: 2px 0; background: transparent; color: var(--text-link, #6fb7ff); font: inherit; font-size: 12px; cursor: pointer; }
+.dmt-button:disabled { cursor: default; color: var(--text-muted, #949ba4); }
+.dmt-button:focus-visible { outline: 2px solid var(--text-link, #6fb7ff); outline-offset: 3px; }
+.dmt-output { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; user-select: text; }
+.dmt-output:empty { display: none; }
+.dmt-error { border-left-color: #ed4245; }
